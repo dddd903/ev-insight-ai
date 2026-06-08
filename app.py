@@ -3,227 +3,119 @@ import pickle
 import numpy as np
 import google.generativeai as genai
 
-# =====================================
-# GEMINI CONFIGURATION
-# =====================================
+# =========================
+# CONFIG
+# =========================
 
-API_KEY = "AQ.Ab8RN6KG-NvQDTfp3jJhjUKVc8YyroSSgDcaAv5IaBhYfR-J6A"
+API_KEY = "AQ.Ab8RN6K9Etv4Bt48rowfxgKjzYmY_ExcUbAvdaE3xJSPIeLzaw"
 
 genai.configure(api_key=API_KEY)
+model_ai = genai.GenerativeModel("gemini-2.5-flash")
 
-gemini_model = genai.GenerativeModel(
-    "gemini-2.5-flash"
-)
-
-# =====================================
-# PAGE SETTINGS
-# =====================================
-
-st.set_page_config(
-    page_title="EV Insight AI",
-    page_icon="🚗",
-    layout="centered"
-)
-
-# =====================================
+# =========================
 # LOAD MODEL
-# =====================================
+# =========================
 
-with open("ev_price_model.pkl", "rb") as file:
-    model = pickle.load(file)
+model = pickle.load(open("ev_price_model.pkl", "rb"))
 
-# =====================================
-# SESSION STATE
-# =====================================
+# =========================
+# SESSION STATE INIT
+# =========================
 
-if "predicted_price" not in st.session_state:
-    st.session_state.predicted_price = None
+if "price" not in st.session_state:
+    st.session_state.price = None
 
-# =====================================
-# TITLE
-# =====================================
+# =========================
+# UI
+# =========================
 
-st.title("🚗 EV Insight AI")
-
-st.subheader(
-    "Electric Vehicle Resale Value Prediction & Advisory System"
-)
-
-st.write(
-    "Predict EV resale value using Machine Learning and receive AI-powered insights."
-)
+st.title("🚗 EV Intelligent Resale System")
+st.write("Predict + Analyze + AI Explanation")
 
 st.divider()
 
-# =====================================
-# USER INPUT
-# =====================================
+# =========================
+# INPUT
+# =========================
 
-st.header("Vehicle Information")
+battery = st.number_input("Battery (kWh)", 10.0, 200.0, 60.0)
+range_km = st.number_input("Remaining Range", 50.0, 1000.0, 350.0)
+age = st.number_input("Car Age", 0, 20, 3)
 
-battery = st.number_input(
-    "Battery Capacity (kWh)",
-    min_value=10.0,
-    max_value=200.0,
-    value=60.0
-)
+# =========================
+# PREDICTION
+# =========================
 
-range_km = st.number_input(
-    "Remaining Range (km)",
-    min_value=50.0,
-    max_value=1000.0,
-    value=350.0
-)
+if st.button("Predict Price"):
 
-age = st.number_input(
-    "Car Age (Years)",
-    min_value=0,
-    max_value=20,
-    value=3
-)
+    X = np.array([[battery, range_km, age]])
+    price = model.predict(X)[0]
 
-# =====================================
-# PREDICTION BUTTON
-# =====================================
+    st.session_state.price = float(price)
 
-if st.button("Predict Resale Price"):
+    st.success(f"Predicted Price: INR {price:,.2f}")
 
-    features = np.array([
-        [battery, range_km, age]
-    ])
-
-    prediction = model.predict(features)
-
-    st.session_state.predicted_price = float(prediction[0])
-
-    st.success(
-        f"Predicted Resale Price: INR {st.session_state.predicted_price:,.2f}"
-    )
-
-    if st.session_state.predicted_price > 1000000:
-
-        st.info(
-            "Excellent resale value. Strong market potential."
-        )
-
-    elif st.session_state.predicted_price > 500000:
-
-        st.info(
-            "Moderate resale value. Competitive in the used EV market."
-        )
-
+    if price > 1000000:
+        st.info("High Value EV")
+    elif price > 500000:
+        st.info("Medium Value EV")
     else:
+        st.warning("Low Value EV")
 
-        st.warning(
-            "Lower resale value. Age and battery condition may affect demand."
-        )
-
-# =====================================
-# DISPLAY CURRENT PREDICTION
-# =====================================
-
-if st.session_state.predicted_price is not None:
-
-    st.divider()
-
-    st.subheader("Current Prediction")
-
-    st.success(
-        f"INR {st.session_state.predicted_price:,.2f}"
-    )
-
-# =====================================
-# AI ASSISTANT
-# =====================================
+# =========================
+# AI CHAT
+# =========================
 
 st.divider()
+st.subheader("AI Assistant")
 
-st.header("🤖 EV AI Assistant")
-
-question = st.text_area(
-    "Ask a question about EV resale value, battery health, depreciation, or future market trends"
-)
+question = st.text_area("Ask question")
 
 if st.button("Ask AI"):
 
-    if question.strip() == "":
+    if st.session_state.price is None:
+        st.warning("Please run prediction first")
 
-        st.warning(
-            "Please enter a question."
-        )
+    elif question.strip() == "":
+        st.warning("Please enter a question")
 
     else:
 
         prompt = f"""
-You are an Electric Vehicle Resale Value Expert.
+You are an EV resale expert.
 
-Machine Learning Prediction:
-Predicted Resale Price = INR {st.session_state.predicted_price}
+Rules:
+- Only use given data
+- Do NOT hallucinate
+- Use prediction value only
+- Keep answer under 100 words
 
-Vehicle Information:
-Battery Capacity = {battery} kWh
-Remaining Range = {range_km} km
-Vehicle Age = {age} years
+Battery: {battery}
+Range: {range_km}
+Age: {age}
+Predicted Price: {st.session_state.price}
 
-User Question:
-{question}
-
-Instructions:
-1. Use the machine learning prediction in your answer.
-2. Explain how battery capacity, remaining range, and vehicle age affect resale value.
-3. Keep the response professional.
-4. Limit the response to approximately 150 words.
+Question: {question}
 """
 
         try:
-
-            response = gemini_model.generate_content(
-                prompt
-            )
-
+            response = model_ai.generate_content(prompt)
             st.subheader("AI Response")
-
             st.write(response.text)
 
         except Exception as e:
+            st.error("AI unavailable. Using fallback response.")
 
-            st.error(
-                "Gemini AI is temporarily unavailable."
-            )
+            st.write(f"""
+EV Analysis:
 
-            st.write(str(e))
+Battery: {battery} kWh  
+Range: {range_km} km  
+Age: {age} years  
 
-            fallback = f"""
-Based on the available vehicle information:
+Predicted Price: INR {st.session_state.price}
 
-• Battery Capacity: {battery} kWh
-
-• Remaining Range: {range_km} km
-
-• Vehicle Age: {age} years
-
-Predicted Resale Price:
-INR {st.session_state.predicted_price}
-
-Analysis:
-
-A higher battery capacity and longer remaining range generally improve resale value because buyers prefer vehicles with stronger battery performance.
-
-Vehicle age contributes to depreciation. As EVs get older, battery wear and technological advancements may reduce market value.
-
-Maintaining battery health and keeping service records can help preserve resale value.
-"""
-
-            st.subheader("Local AI Analysis")
-
-            st.write(fallback)
-
-# =====================================
-# FOOTER
-# =====================================
-
-st.divider()
-
-st.caption(
-    "Powered by Linear Regression, Streamlit, and Google Gemini AI"
-)
+Key Insight:
+Battery, range, and age are main factors affecting EV resale value.
+Older vehicles generally have lower resale value due to depreciation.
+""")
